@@ -22,11 +22,11 @@ SELECT * FROM lookup_table
 -- k přiřazení ročních období ke dnům jsem použil funkci MONTH 
 
 WITH Time_variables AS (
-
-SELECT 
-	date,
-	country,
-	YEAR(date) AS rok,
+	
+	SELECT 
+		date,
+		country,
+		YEAR(date) AS rok,
 	CASE 
 		WHEN WEEKDAY(cbd.date) IN (5, 6) THEN 1 ELSE 0 END AS weekend,
 	(CASE 
@@ -34,7 +34,7 @@ SELECT
 		WHEN MONTH(date) IN (3, 4, 5) THEN 1
 		WHEN MONTH(date) IN  (6, 7, 8) THEN 2
 		WHEN MONTH(date) IN  (9, 10, 11) THEN 3
- END) AS season
+ 	END) AS season
 
 FROM covid19_basic_differences cbd),
 
@@ -43,88 +43,93 @@ FROM covid19_basic_differences cbd),
 -- odečetl a agregoval 
 
 Life_exp_diff AS (
-
-SELECT a.country, a.life_exp_1965 , b.life_exp_2015,
-    round( b.life_exp_2015 / a.life_exp_1965, 2 ) as life_exp_ratio,
-    ABS(a.life_exp_1965 - b.life_exp_2015) AS life_exp_difference
+	
+	SELECT 
+		lf1.country, 
+		lf1.life_exp_1965, 
+		lf2.life_exp_2015,
+    	round( lf2.life_exp_2015 / lf1.life_exp_1965, 2 ) as life_exp_ratio,
+    	ABS(lf1.life_exp_1965 - lf2.life_exp_2015) AS life_exp_difference
+	
 	FROM (
-SELECT le.country , le.life_expectancy as life_exp_1965
-	FROM life_expectancy le 
-    WHERE year = 1965
-    ) a JOIN (
- SELECT le.country , le.life_expectancy as life_exp_2015
-    FROM life_expectancy le 
-    WHERE year = 2015
-    ) b
-    ON a.country = b.country),
+		SELECT le.country , le.life_expectancy as life_exp_1965
+		FROM life_expectancy le 
+		WHERE year = 1965 
+		) lf1 
+	JOIN (
+		SELECT le.country , le.life_expectancy as life_exp_2015
+		FROM life_expectancy le 
+		WHERE year = 2015
+    		) lf2
+    	ON lf1.country = lf2.country),
    
---- 3) Religion 
---tabulku bylo třeba nejdříve pivotovat a vytvořit sloupečky pro jednotlivé náboženstí, aby bylo později možné 
+-- 3) Religion 
+-- tabulku bylo třeba nejdříve pivotovat a vytvořit sloupečky pro jednotlivé náboženstí, aby bylo později možné 
 -- provádět matematické operace
 -- tabulku jsem spojil s economies, abychom mohl kalkulovat s populací jednotlivých států
 -- jelikož tabulka religion je dělaná po 10 letech, rozhodl jsem se je spojit pomocí roku kdy rok o jeden menší v economies
 -- je stejný jako rok v religion
     
  Religion_ratio AS (
- 
- SELECT 
- 	r.country,
- 	MAX(CASE religion WHEN 'Islam' THEN ROUND(r.population / e.population * 100,2) END) Islam_rel,
- 	MAX(CASE religion WHEN 'Christianity' THEN ROUND(r.population / e.population * 100,2) END) Christianity_rel,
- 	MAX(CASE religion WHEN 'Unaffiliated Religions' THEN ROUND(r.population / e.population * 100,2) END) Unaffiliated_rel,
- 	MAX(CASE religion WHEN 'Hinduism' THEN ROUND(r.population / e.population * 100,2) END) Hinduism_rel,
- 	MAX(CASE religion WHEN 'Buddhism' THEN ROUND(r.population / e.population * 100,2) END) Buddhism_rel,
- 	MAX(CASE religion WHEN 'Folk Religions' THEN ROUND(r.population / e.population * 100,2) END) Folk_rel,
- 	MAX(CASE religion WHEN 'Other Religions' THEN ROUND(r.population / e.population * 100,2) END) Other_rel,
- 	MAX(CASE religion WHEN 'Judaism' THEN ROUND(r.population / e.population * 100,2) END) Judaism_rel
+	 
+	 SELECT 
+ 		r.country,
+ 		MAX(CASE religion WHEN 'Islam' THEN ROUND(r.population / e.population * 100,2) END) Islam_rel,
+ 		MAX(CASE religion WHEN 'Christianity' THEN ROUND(r.population / e.population * 100,2) END) Christianity_rel,
+ 		MAX(CASE religion WHEN 'Unaffiliated Religions' THEN ROUND(r.population / e.population * 100,2) END) Unaffiliated_rel,
+ 		MAX(CASE religion WHEN 'Hinduism' THEN ROUND(r.population / e.population * 100,2) END) Hinduism_rel,
+ 		MAX(CASE religion WHEN 'Buddhism' THEN ROUND(r.population / e.population * 100,2) END) Buddhism_rel,
+ 		MAX(CASE religion WHEN 'Folk Religions' THEN ROUND(r.population / e.population * 100,2) END) Folk_rel,
+ 		MAX(CASE religion WHEN 'Other Religions' THEN ROUND(r.population / e.population * 100,2) END) Other_rel,
+ 		MAX(CASE religion WHEN 'Judaism' THEN ROUND(r.population / e.population * 100,2) END) Judaism_rel
  	
  	FROM religions r 
  	INNER JOIN economies e 
- 	ON e.country = r.country 
-	AND CAST(e.year-1 AS INT) = CAST(r.year AS INT)
-	-- WHERE 1=1
-	-- AND e.GDP IS NOT NULL 
-	-- AND e.gini IS NOT NULL 
-	-- AND e.population IS NOT NULL
-	GROUP BY r.country
+		ON e.country = r.country 
+		AND CAST(e.year-1 AS INT) = CAST(r.year AS INT)
+		-- WHERE 1=1
+		-- AND e.GDP IS NOT NULL 
+		-- AND e.gini IS NOT NULL 
+		-- AND e.population IS NOT NULL
+		GROUP BY r.country
 	
  	),
  -- 4)
- --u tabulek weather  bylo třeba převést jednotlivé sloupečky na INT a odebrat od nich jednotky 
+ -- u tabulek weather  bylo třeba převést jednotlivé sloupečky na INT a odebrat od nich jednotky 
  -- později bylo třeba tabulku spojit nejdříve přes capital_city z countries a později až na zemi, jelikož weather neobsahuje země
  
  	weather_1 AS (
-
-SELECT 
-	date,
-    city,
-	AVG(CAST((REPLACE(temp,'°c','')) AS INT)) AS Avg_temp
-FROM weather 
-	WHERE time BETWEEN '08:00' AND  '20:00'
-	GROUP BY date,city
-	ORDER BY date DESC ),
+	
+	SELECT 
+		date,
+    		city,
+		AVG(CAST((REPLACE(temp,'°c','')) AS INT)) AS Avg_temp
+	FROM weather 
+		WHERE time BETWEEN '08:00' AND  '20:00'
+		GROUP BY date,city
+		ORDER BY date DESC ),
 
 weather_2 AS (
 
-SELECT 
-	city,
-	date,
-	COUNT(time) * 3 AS Hour_count,
-	ROUND(CAST((REPLACE(rain,'mm','')) AS FLOAT),1) AS rain_int
-FROM weather 
-	WHERE ROUND(CAST((REPLACE(rain,'mm','')) AS FLOAT),1) > 0
-	GROUP BY date,city
-	ORDER BY date DESC ),
+	SELECT 
+		city,
+		date,
+		COUNT(time) * 3 AS Hour_count,
+		ROUND(CAST((REPLACE(rain,'mm','')) AS FLOAT),1) AS rain_int
+	FROM weather 
+		WHERE ROUND(CAST((REPLACE(rain,'mm','')) AS FLOAT),1) > 0
+		GROUP BY date,city
+		ORDER BY date DESC ),
 
 weather_3 AS (
 
-SELECT 
-	city,
-	date,
-	CAST((REPLACE(gust,'km/h','')) AS INT) AS Max_wind
-FROM weather 
-GROUP BY date,city
-ORDER BY date DESC)
+	SELECT 
+		city,
+		date,
+		CAST((REPLACE(gust,'km/h','')) AS INT) AS Max_wind
+	FROM weather 
+		GROUP BY date,city
+		ORDER BY date DESC)
  
 -- vybráné sloupečky, keré se mají zobrazit na plachtě
 
@@ -168,6 +173,11 @@ LEFT JOIN weather_2 AS w2
 ON w2.city = c.capital_city 
 LEFT JOIN weather_3 AS w3
 ON w3.city = c.capital_city 
+-- na ukázku, jak pracovat tabulkou a vyselektovat různé typy dat
+WHERE tv.country ='Albania'
+AND tv.rok = 2020
+-- AND tv.counry ='Denmark'
+AND weekend = 1
 
 
 -- na první pohled některé sloupečky jsou nulové. je to z důvodu že pro daný rok chybí v tabulce economies data
